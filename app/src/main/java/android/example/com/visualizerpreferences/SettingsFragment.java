@@ -24,13 +24,13 @@ import android.support.v7.preference.EditTextPreference;
 import android.support.v7.preference.ListPreference;
 import android.support.v7.preference.Preference;
 import android.support.v7.preference.PreferenceFragmentCompat;
-import android.support.v7.preference.PreferenceManager;
 import android.support.v7.preference.PreferenceScreen;
 import android.widget.Toast;
 
-import java.util.List;
 
-public class SettingsFragment extends PreferenceFragmentCompat implements OnSharedPreferenceChangeListener {
+public class SettingsFragment extends PreferenceFragmentCompat implements
+        OnSharedPreferenceChangeListener,
+        Preference.OnPreferenceChangeListener {
 
     @Override
     public void onCreatePreferences(Bundle bundle, String s) {
@@ -42,40 +42,87 @@ public class SettingsFragment extends PreferenceFragmentCompat implements OnShar
         PreferenceScreen prefScreen = getPreferenceScreen();
         int count = prefScreen.getPreferenceCount();
 
+        // Go through all of the preferences, and set up their preference summary.
         for (int i = 0; i < count; i++) {
             Preference p = prefScreen.getPreference(i);
+            // You don't need to set up preference summaries for checkbox preferences because
+            // they are already set up in xml using summaryOff and summary On
             if (!(p instanceof CheckBoxPreference)) {
                 String value = sharedPreferences.getString(p.getKey(), "");
                 setPreferenceSummary(p, value);
             }
         }
-        sharedPreferences.registerOnSharedPreferenceChangeListener(this);
-    }
 
-    private void setPreferenceSummary(Preference preference, String value) {
-        if (preference instanceof ListPreference) {
-            ListPreference listPreference = (ListPreference) preference;
-            int prefIndex = listPreference.findIndexOfValue(value);
-            if (prefIndex >= 0) {
-                listPreference.setSummary(listPreference.getEntries()[prefIndex]);
-            }
-        }
+        Preference preference = findPreference(getString(R.string.pref_size_key));
+        preference.setOnPreferenceChangeListener(this);
     }
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        Preference p = findPreference(key);
-        if (null != p) {
-            String value = sharedPreferences.getString(p.getKey(), "");
-            setPreferenceSummary(p, value);
+        // Figure out which preference was changed
+        Preference preference = findPreference(key);
+        if (null != preference) {
+            // Updates the summary for the preference
+            if (!(preference instanceof CheckBoxPreference)) {
+                String value = sharedPreferences.getString(preference.getKey(), "");
+                setPreferenceSummary(preference, value);
+            }
         }
     }
 
+    /**
+     * Updates the summary for the preference
+     *
+     * @param preference The preference to be updated
+     * @param value      The value that the preference was updated to
+     */
+    private void setPreferenceSummary(Preference preference, String value) {
+        if (preference instanceof ListPreference) {
+            // For list preferences, figure out the label of the selected value
+            ListPreference listPreference = (ListPreference) preference;
+            int prefIndex = listPreference.findIndexOfValue(value);
+            if (prefIndex >= 0) {
+                // Set the summary to that label
+                listPreference.setSummary(listPreference.getEntries()[prefIndex]);
+            }
+        } else if (preference instanceof EditTextPreference) {
+            preference.setSummary(value);
+        }
+    }
+    
     @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        getPreferenceScreen()
-                .getSharedPreferences()
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getPreferenceScreen().getSharedPreferences()
+                .registerOnSharedPreferenceChangeListener(this);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        getPreferenceScreen().getSharedPreferences()
                 .unregisterOnSharedPreferenceChangeListener(this);
+    }
+
+
+    @Override
+    public boolean onPreferenceChange(Preference preference, Object newValue) {
+        Toast error = Toast.makeText(getContext(), "Please select number between 0.1 and 3", Toast.LENGTH_SHORT);
+
+        String sizeKey = getString(R.string.pref_size_key);
+        if (preference.getKey().equals(sizeKey)) {
+            String stringSize = (String) newValue;
+            try {
+                float size = Float.parseFloat(stringSize);
+                if (size < 0.1 || size > 3) {
+                    error.show();
+                    return false;
+                }
+            } catch (NumberFormatException e) {
+                error.show();
+                return false;
+            }
+        }
+        return true;
     }
 }
